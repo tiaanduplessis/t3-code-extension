@@ -34,13 +34,14 @@ fetch("/api/cart/apply-discount", { method: "POST" });
 const server = createServer((q, r) => q.url.startsWith("/api") ? r.writeHead(500).end() : r.writeHead(200, { "content-type": "text/html" }).end(html));
 await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
 const profile = mkdtempSync(join(tmpdir(), "t3-shots-p-"));
-const ctx = await chromium.launchPersistentContext(profile, { channel: "chromium", headless: true, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`], viewport: { width: 1280, height: 800 } });
+// The README shows the dark theme.
+const ctx = await chromium.launchPersistentContext(profile, { channel: "chromium", headless: true, colorScheme: "dark", args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`], viewport: { width: 1280, height: 800 } });
 const sw = ctx.serviceWorkers()[0] ?? await ctx.waitForEvent("serviceworker");
 const id = new URL(sw.url()).host;
 let token;
 const page = await ctx.newPage(); await page.goto(`http://127.0.0.1:${server.address().port}/`); await page.waitForTimeout(500);
 const tabId = await sw.evaluate(async () => (await chrome.tabs.query({ url: "http://127.0.0.1/*" }))[0].id);
-async function popup(scheme = "light") {
+async function popup(scheme = "dark") {
   await page.bringToFront();
   const p = ctx.waitForEvent("page");
   await sw.evaluate(async (tid) => chrome.windows.create({ url: chrome.runtime.getURL(`popup.html?tabId=${tid}`), type: "popup", width: 480, height: 760 }), tabId);
@@ -63,6 +64,7 @@ try {
     await chrome.storage.local.set({ connections });
     return Object.values(connections)[0].accessToken;
   });
+  await opts.emulateMedia({ colorScheme: "dark" });
   await opts.waitForTimeout(500);
   await opts.screenshot({ path: "docs/images/settings.png", fullPage: true });
 
