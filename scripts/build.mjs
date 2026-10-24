@@ -3,10 +3,18 @@
 // background worker; esbuild bundles content scripts as classic IIFE scripts,
 // which Chrome requires for content scripts.
 import { build as viteBuild } from "vite";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { context, build as esbuild } from "esbuild";
 
 const watch = process.argv.includes("--watch");
+
+// package.json is the version source of truth; the manifest must match it.
+const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
+const manifestVersion = JSON.parse(readFileSync("public/manifest.json", "utf8")).version;
+if (packageVersion !== manifestVersion) {
+  console.error(`Version mismatch: package.json has ${packageVersion}, public/manifest.json has ${manifestVersion}.`);
+  process.exit(1);
+}
 
 const contentScripts = {
   entryPoints: { "content/slack": "src/content/slack.ts" },
