@@ -1,9 +1,9 @@
-import { GlobeIcon, LinkIcon, MessageSquareIcon, NetworkIcon, TerminalIcon, TextQuoteIcon } from "lucide-react";
+import { CrosshairIcon, GlobeIcon, LinkIcon, MessageSquareIcon, NetworkIcon, TerminalIcon, TextQuoteIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/ui/cn";
 import { Tooltip } from "@/ui/misc";
 
-export type ContextKey = "page" | "selection" | "slack" | "console" | "network";
+export type ContextKey = "page" | "selection" | "slack" | "console" | "network" | "element";
 
 export interface ContextChip {
   key: ContextKey | "link";
@@ -21,6 +21,7 @@ export const CONTEXT_ICONS: Record<ContextChip["key"], ReactNode> = {
   console: <TerminalIcon />,
   network: <NetworkIcon />,
   link: <LinkIcon />,
+  element: <CrosshairIcon />,
 };
 
 /** Context items in the style of T3 Code's composer context strip. Click to include or leave out. */

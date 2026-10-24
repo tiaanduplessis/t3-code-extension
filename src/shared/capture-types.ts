@@ -96,11 +96,39 @@ export interface NetworkFailure {
   statusText?: string;
   durationMs?: number;
   timestamp: number;
+  /** Start of the response body, for failures captured while recording. Capped at 1,000 characters. */
+  responseExcerpt?: string;
 }
 
 export interface Diagnostics {
   console: ConsoleEntry[];
   network: NetworkFailure[];
+  /** Present when the diagnostics come from a recording rather than the console history. */
+  recording?: { durationMs: number; requests: number };
+}
+
+/** An element the user picked on the page with the element picker. */
+export interface PickedElement {
+  /** A CSS selector that matches only this element at pick time. */
+  selector: string;
+  tag: string;
+  /** Visible text, trimmed and capped at 300 characters. */
+  text?: string;
+  /** Useful attributes only: id, class, role, aria-*, name, type, href, src, alt, title, placeholder, data-testid and similar. */
+  attributes: Record<string, string>;
+  /** CSS pixels relative to the viewport at pick time. */
+  rect: { x: number; y: number; width: number; height: number };
+  viewport: { width: number; height: number };
+  /** outerHTML capped at 2,000 characters. */
+  html: string;
+  /** Present when a development build of a framework exposes component details. */
+  framework?: {
+    name: "react" | "vue" | "svelte";
+    /** Nearest component first, up to 5 owners. */
+    components: string[];
+    source?: { file: string; line?: number; column?: number };
+  };
+  pageUrl: string;
 }
 
 /** Global name shared between the Slack content script and the injected capture function. */

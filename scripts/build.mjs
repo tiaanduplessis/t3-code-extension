@@ -17,7 +17,11 @@ if (packageVersion !== manifestVersion) {
 }
 
 const contentScripts = {
-  entryPoints: { "content/slack": "src/content/slack.ts" },
+  entryPoints: {
+    "content/slack": "src/content/slack.ts",
+    "content/picker": "src/content/picker.ts",
+    "content/picker-bridge": "src/content/picker-bridge.ts",
+  },
   outdir: "dist",
   bundle: true,
   format: "iife",

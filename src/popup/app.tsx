@@ -1,6 +1,7 @@
 import { SettingsIcon, UnplugIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { captureTab } from "@/shared/capture";
+import type { Diagnostics } from "@/shared/capture-types";
 import type { Capture, DispatchState } from "@/shared/messages";
 import { sendToBackground } from "@/shared/messages";
 import { Button } from "@/ui/button";
@@ -39,7 +40,8 @@ function useCapture() {
           (await captureTab(tab, {
             readConsole: (tabId, url) => sendToBackground({ type: "console:read", tabId, url }),
           }));
-        if (active) setCapture(next);
+        const picked = await sendToBackground({ type: "picker:take", tabId: tab.id });
+        if (active) setCapture(picked ? { ...next, picked } : next);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
@@ -51,7 +53,13 @@ function useCapture() {
     };
   }, [attempt]);
 
-  return { capture, loading, error, recapture: () => setAttempt((value) => value + 1) };
+  return {
+    capture,
+    loading,
+    error,
+    recapture: () => setAttempt((value) => value + 1),
+    attachDiagnostics: (diagnostics: Diagnostics) => setCapture((current) => (current ? { ...current, diagnostics } : current)),
+  };
 }
 
 function Header() {
@@ -85,7 +93,7 @@ function NotConnected() {
 export function App() {
   const connections = useLocal("connections");
   const preferences = useLocal("preferences");
-  const { capture, loading: captureLoading, error: captureError, recapture } = useCapture();
+  const { capture, loading: captureLoading, error: captureError, recapture, attachDiagnostics } = useCapture();
   const [result, setResult] = useState<DispatchState>();
   const [composerKey, setComposerKey] = useState(0);
 
@@ -149,6 +157,7 @@ export function App() {
                 capture={capture}
                 captureLoading={captureLoading}
                 onRecapture={recapture}
+                onDiagnostics={attachDiagnostics}
                 onDispatched={setResult}
               />
             </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Diagnostics, PageContext } from "@/shared/capture-types";
-import { buildMessage, MAX_MESSAGE_LENGTH, suggestTitle, UNTRUSTED_NOTICE, type PromptParts } from "./prompt";
+import { buildMessage, composeMessage, MAX_MESSAGE_LENGTH, suggestTitle, UNTRUSTED_NOTICE, type PromptParts } from "./prompt";
 
 const page: PageContext = {
   url: "https://app.example.com/orders/42",
@@ -120,6 +120,57 @@ describe("buildMessage", () => {
   it("falls back to the tab address when the page could not be read", () => {
     const message = buildMessage(parts({ page: null, tab: { url: "chrome://settings", title: "Settings" } }));
     expect(message).toContain("Page: [Settings](chrome://settings)");
+  });
+
+  it("redacts captured context but not the user's note", () => {
+    const { message, redactions } = composeMessage(
+      parts({
+        note: "My token is ghp_abcdefghijklmnopqrstuvwxyz0123456789 and that is fine",
+        page: { ...page, url: "https://app.example.com/orders?access_token=abc123", selection: "Bearer abcdefghijklmnopq" },
+      }),
+    );
+    expect(message).toContain("My token is ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+    expect(message).toContain("(https://app.example.com/orders?access_token=[redacted])");
+    expect(message).toContain("> Bearer [redacted]");
+    expect(message).toContain("Masked before sending: 1 authorization header, 1 URL parameter.");
+    expect(redactions).toEqual({ "URL parameter": 1, "authorization header": 1 });
+  });
+
+  it("describes a recording and includes response excerpts", () => {
+    const message = buildMessage(
+      parts({
+        page: { ...page, failedResources: [] },
+        diagnostics: {
+          console: [],
+          network: [{ method: "POST", url: "https://api.example.com/cart", status: 422, statusText: "Unprocessable", durationMs: 80, timestamp: 0, responseExcerpt: '{\n  "error": "discount expired"\n}' }],
+          recording: { durationMs: 42_000, requests: 37 },
+        },
+      }),
+    );
+    expect(message).toContain("The user recorded 42.0 s of activity while reproducing the problem (37 requests).");
+    expect(message).toContain('POST https://api.example.com/cart -> 422 Unprocessable (80 ms)\n    response: { "error": "discount expired" }');
+  });
+
+  it("describes a picked element with its component and source", () => {
+    const message = buildMessage(
+      parts({
+        picked: {
+          selector: "#pay",
+          tag: "button",
+          text: "Pay now",
+          attributes: { id: "pay", type: "submit" },
+          rect: { x: 10.4, y: 20, width: 100, height: 32 },
+          viewport: { width: 1280, height: 800 },
+          html: '<button id="pay" type="submit">Pay now</button>',
+          framework: { name: "react", components: ["PayButton", "Checkout"], source: { file: "src/checkout/PayButton.tsx", line: 12, column: 5 } },
+          pageUrl: page.url,
+        },
+      }),
+    );
+    expect(message).toContain("### Element the user picked\n\nSelector: `#pay`\nComponent (react): PayButton < Checkout\nSource: src/checkout/PayButton.tsx:12:5\nText: Pay now");
+    expect(message).toContain('Attributes: id="pay" type="submit"');
+    expect(message).toContain("Position: 100x32 at (10, 20) in a 1280x800 viewport");
+    expect(buildMessage(parts({ includeElement: false, picked: { selector: "#x", tag: "a", attributes: {}, rect: { x: 0, y: 0, width: 1, height: 1 }, viewport: { width: 1, height: 1 }, html: "", pageUrl: "" } }))).not.toContain("Element the user picked");
   });
 
   it("stays within T3 Code's message limit", () => {

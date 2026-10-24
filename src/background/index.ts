@@ -1,9 +1,14 @@
 import { captureTab } from "@/shared/capture";
+import type { PickedElement } from "@/shared/capture-types";
 import type { Capture, Envelope, RuntimeRequest } from "@/shared/messages";
 import { subscribe } from "@/shared/storage";
 import { readConsole } from "./console-reader";
 import { DISPATCH_PORT_PREFIX, runDispatch, settleInterruptedDispatches, watchDispatch } from "./dispatch";
 import { syncOriginRules } from "./origin-rules";
+import { discardRecording, isRecording, recordingStatus, startRecording, stopRecording } from "./recorder";
+
+// A recording already holds the debugger for its tab, so skip the replay there.
+const readConsoleUnlessRecording = (tabId: number, url: string) => (isRecording(tabId) ? Promise.resolve(null) : readConsole(tabId, url));
 
 const MENU_ID = "send-to-t3";
 const PENDING_CAPTURE_TTL_MS = 2 * 60_000;
@@ -62,7 +67,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   // openPopup must run while the click still counts as a user gesture, so
   // start it before the capture finishes. The popup waits for the capture.
   const linkUrl = info.linkUrl ?? info.srcUrl;
-  const capture = captureTab(tab, { ...(linkUrl ? { linkUrl } : {}), readConsole });
+  const capture = captureTab(tab, { ...(linkUrl ? { linkUrl } : {}), readConsole: readConsoleUnlessRecording });
   pendingCaptures.set(tabId, { createdAt: Date.now(), capture });
   chrome.action.openPopup({ windowId: tab.windowId }).catch(async () => {
     await capture.catch(() => undefined);
@@ -81,6 +86,23 @@ chrome.notifications.onClicked.addListener((notificationId) => {
   chrome.notifications.clear(notificationId);
 });
 
+// Elements picked on a page, held until the composer reopens for that tab.
+const pendingPicks = new Map<number, PickedElement>();
+
+async function reopenComposer(tab: chrome.tabs.Tab) {
+  if (tab.id === undefined) return;
+  const tabId = tab.id;
+  await chrome.action.openPopup({ windowId: tab.windowId }).catch(async () => {
+    await chrome.windows.create({ url: chrome.runtime.getURL(`popup.html?tabId=${tabId}`), type: "popup", width: 480, height: 720 });
+  });
+}
+
+async function startPicker(tabId: number) {
+  // The bridge relays the picker's result from the page world to the extension.
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["content/picker-bridge.js"] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["content/picker.js"], world: "MAIN" });
+}
+
 async function takePendingCapture(tabId: number): Promise<Capture | null> {
   const pending = pendingCaptures.get(tabId);
   pendingCaptures.delete(tabId);
@@ -88,8 +110,27 @@ async function takePendingCapture(tabId: number): Promise<Capture | null> {
   return pending.capture.catch(() => null);
 }
 
-async function handle(request: RuntimeRequest): Promise<unknown> {
+async function handle(request: RuntimeRequest, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (request.type) {
+    case "picker:start":
+      await startPicker(request.tabId);
+      return null;
+    case "picker:take": {
+      const picked = pendingPicks.get(request.tabId) ?? null;
+      pendingPicks.delete(request.tabId);
+      return picked;
+    }
+    case "picker:result":
+    case "picker:cancel": {
+      const tab = sender.tab;
+      if (!tab?.id) return null;
+      if (request.type === "picker:result") {
+        // The page shares the picker's world and could forge the URL; use the tab's.
+        pendingPicks.set(tab.id, { ...request.element, pageUrl: tab.url ?? request.element.pageUrl });
+      }
+      await reopenComposer(tab);
+      return null;
+    }
     case "dispatch":
       return runDispatch(request.request);
     case "capture:take":
@@ -97,7 +138,15 @@ async function handle(request: RuntimeRequest): Promise<unknown> {
     case "console:read":
       // Runs here rather than in the popup, so closing the popup cannot leave
       // the debugger attached.
-      return readConsole(request.tabId, request.url);
+      return readConsoleUnlessRecording(request.tabId, request.url);
+    case "recording:start":
+      return startRecording(request.tabId, request.url);
+    case "recording:status":
+      return recordingStatus(request.tabId);
+    case "recording:stop":
+      return stopRecording(request.tabId);
+    case "recording:discard":
+      return discardRecording(request.tabId);
   }
 }
 
@@ -107,7 +156,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
 chrome.runtime.onMessage.addListener((request: RuntimeRequest, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
-  handle(request).then(
+  handle(request, sender).then(
     (value) => sendResponse({ ok: true, value } satisfies Envelope<unknown>),
     (error: unknown) =>
       sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) } satisfies Envelope<unknown>),

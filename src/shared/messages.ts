@@ -1,7 +1,7 @@
 // Messages between extension pages (popup, options) and the background worker.
 
 import type { InteractionMode, ModelSelection, RuntimeMode, SendMode, WorkspaceStrategy } from "@/lib/t3";
-import type { BrowserInfo, Diagnostics, PageContext } from "./capture-types";
+import type { BrowserInfo, Diagnostics, PageContext, PickedElement } from "./capture-types";
 
 export interface Capture {
   id: string;
@@ -19,6 +19,8 @@ export interface Capture {
   diagnostics: Diagnostics | null;
   browser: BrowserInfo | null;
   linkUrl?: string;
+  /** The element the user picked before this capture, if any. */
+  picked?: PickedElement;
 }
 
 export type DispatchTarget =
@@ -70,15 +72,38 @@ export interface DispatchState {
 export type RuntimeRequest =
   | { type: "dispatch"; request: DispatchRequest }
   | { type: "capture:take"; tabId: number }
-  | { type: "console:read"; tabId: number; url: string };
+  | { type: "console:read"; tabId: number; url: string }
+  | { type: "recording:start"; tabId: number; url: string }
+  | { type: "recording:status"; tabId: number }
+  | { type: "recording:stop"; tabId: number }
+  | { type: "recording:discard"; tabId: number }
+  | { type: "picker:start"; tabId: number }
+  | { type: "picker:take"; tabId: number }
+  // Sent by the picker bridge content script in the tab.
+  | { type: "picker:result"; element: PickedElement }
+  | { type: "picker:cancel" };
+
+export interface RecordingStatus {
+  active: boolean;
+  startedAt?: number;
+  requests: number;
+  failures: number;
+  problems: number;
+}
 
 export type RuntimeResponse<T extends RuntimeRequest["type"]> = T extends "dispatch"
   ? DispatchState
   : T extends "capture:take"
     ? Capture | null
-    : T extends "console:read"
+    : T extends "console:read" | "recording:stop"
       ? Diagnostics | null
-      : never;
+      : T extends "recording:start" | "recording:status"
+        ? RecordingStatus
+        : T extends "recording:discard" | "picker:start" | "picker:result" | "picker:cancel"
+          ? null
+          : T extends "picker:take"
+            ? PickedElement | null
+            : never;
 
 export type Envelope<T> = { ok: true; value: T } | { ok: false; error: string };
 

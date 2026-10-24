@@ -7,12 +7,17 @@
 
 import type { ConsoleEntry, ConsoleLevel, Diagnostics, NetworkFailure } from "@/shared/capture-types";
 import { readLocal } from "@/shared/storage";
+import { loadSourceMaps, symbolicate, type OriginalPosition, type ScriptInfo, type SendCommand, type StackFrame } from "./source-maps";
 
 const MAX_CONSOLE = 100;
 const MAX_NETWORK = 50;
 const MAX_TEXT = 2_000;
 const SETTLE_MS = 150;
-const TIMEOUT_MS = 1_500;
+const TIMEOUT_MS = 2_500;
+/** Time allowed for loading source maps, within the overall read timeout. */
+const SOURCE_MAP_BUDGET_MS = 1_200;
+
+export type FrameResolver = (frame: StackFrame) => OriginalPosition | null;
 
 export interface DebuggerEvent {
   method: string;
@@ -52,18 +57,27 @@ export function formatRemoteObject(object: RemoteObject): string {
   return object.description ?? object.type ?? "";
 }
 
-function formatStack(frames: CallFrame[] | undefined): string | undefined {
+function formatFrame(frame: CallFrame, resolve?: FrameResolver): string {
+  const original =
+    resolve && frame.url
+      ? resolve({ url: frame.url, lineNumber: frame.lineNumber ?? 0, columnNumber: frame.columnNumber ?? 0, ...(frame.functionName ? { functionName: frame.functionName } : {}) })
+      : null;
+  if (original) return `at ${original.name || frame.functionName || "(anonymous)"} (${original.source}:${original.line}:${original.column})`;
+  return `at ${frame.functionName || "(anonymous)"} (${frame.url ?? ""}:${(frame.lineNumber ?? 0) + 1}:${(frame.columnNumber ?? 0) + 1})`;
+}
+
+function formatStack(frames: CallFrame[] | undefined, resolve?: FrameResolver): string | undefined {
   if (!frames?.length) return undefined;
   return frames
     .slice(0, 6)
-    .map((frame) => `at ${frame.functionName || "(anonymous)"} (${frame.url ?? ""}:${(frame.lineNumber ?? 0) + 1}:${(frame.columnNumber ?? 0) + 1})`)
+    .map((frame) => formatFrame(frame, resolve))
     .join("\n");
 }
 
 const FAILED_RESOURCE = /status of (\d{3})(?: \(([^)]*)\))?/;
 
 /** Converts replayed debugger events into console entries and network failures. */
-export function diagnosticsFromEvents(events: DebuggerEvent[]): Diagnostics {
+export function diagnosticsFromEvents(events: DebuggerEvent[], resolve?: FrameResolver): Diagnostics {
   // Content scripts of other extensions run in isolated contexts; leave them out.
   const isolated = new Set<number>();
   for (const event of events) {
@@ -91,10 +105,14 @@ export function diagnosticsFromEvents(events: DebuggerEvent[]): Diagnostics {
       const level: ConsoleLevel | null = type === "error" || type === "assert" ? "error" : type === "warning" ? "warn" : null;
       if (!level) continue;
       const args = (params.args as RemoteObject[] | undefined) ?? [];
-      const stack = formatStack((params.stackTrace as { callFrames?: CallFrame[] } | undefined)?.callFrames);
+      const stack = formatStack((params.stackTrace as { callFrames?: CallFrame[] } | undefined)?.callFrames, resolve);
+      // A logged Error's description repeats its own unmapped stack; the call's
+      // stack is reported separately (and mapped), so keep only the first line.
+      const formatArg = (arg: RemoteObject) =>
+        stack && arg.subtype === "error" ? (formatRemoteObject(arg).split("\n")[0] ?? "") : formatRemoteObject(arg);
       push({
         level,
-        message: cap(args.map(formatRemoteObject).join(" ")),
+        message: cap(args.map(formatArg).join(" ")),
         ...(stack ? { detail: cap(stack) } : {}),
         timestamp: Math.round((params.timestamp as number) ?? Date.now()),
       });
@@ -110,7 +128,9 @@ export function diagnosticsFromEvents(events: DebuggerEvent[]): Diagnostics {
       if (details.executionContextId !== undefined && isolated.has(details.executionContextId)) continue;
       const description = details.exception ? formatRemoteObject(details.exception) : (details.text ?? "Uncaught error");
       const [first, ...rest] = description.split("\n");
-      const stack = rest.join("\n").trim() || formatStack(details.stackTrace?.callFrames);
+      // Structured frames can be mapped to original sources; the description's stack cannot.
+      const mappedStack = resolve ? formatStack(details.stackTrace?.callFrames, resolve) : undefined;
+      const stack = mappedStack || rest.join("\n").trim() || formatStack(details.stackTrace?.callFrames);
       push({
         level: details.text?.includes("(in promise)") ? "unhandledrejection" : "uncaught",
         message: cap(first ?? description),
@@ -143,7 +163,7 @@ export async function hasConsoleAccess(): Promise<boolean> {
   return (await readLocal("preferences")).readConsole;
 }
 
-function canAttach(url: string): boolean {
+export function canAttach(url: string): boolean {
   try {
     const { protocol, hostname } = new URL(url);
     return (protocol === "http:" || protocol === "https:") && hostname !== "chromewebstore.google.com";
@@ -152,14 +172,67 @@ function canAttach(url: string): boolean {
   }
 }
 
+function frameUrls(events: DebuggerEvent[]): Set<string> {
+  const urls = new Set<string>();
+  for (const { method, params } of events) {
+    const frames =
+      method === "Runtime.consoleAPICalled"
+        ? (params.stackTrace as { callFrames?: CallFrame[] } | undefined)?.callFrames
+        : method === "Runtime.exceptionThrown"
+          ? (params.exceptionDetails as { stackTrace?: { callFrames?: CallFrame[] } }).stackTrace?.callFrames
+          : undefined;
+    for (const frame of frames ?? []) if (frame.url) urls.add(frame.url);
+  }
+  return urls;
+}
+
+/** Keeps only what source-map loading needs from scriptParsed, which can be thousands of large events. */
+export function scriptInfo(params: Record<string, unknown>): ScriptInfo | null {
+  const url = params.url as string | undefined;
+  const sourceMapURL = params.sourceMapURL as string | undefined;
+  return url && sourceMapURL ? { url, sourceMapURL } : null;
+}
+
+/**
+ * Builds a frame resolver from the page's source maps. Enables the Debugger
+ * domain only when there are frames to map; Chrome then replays scriptParsed
+ * (with source map URLs) for scripts that loaded earlier.
+ */
+export async function buildResolver(
+  send: SendCommand,
+  events: DebuggerEvent[],
+  scripts: ScriptInfo[],
+  deadline: number,
+): Promise<FrameResolver | undefined> {
+  const wanted = frameUrls(events);
+  if (wanted.size === 0) return undefined;
+  try {
+    await send("Debugger.enable");
+    // A `debugger;` statement in the page would otherwise pause it.
+    await send("Debugger.setSkipAllPauses", { skip: true });
+    const maps = await loadSourceMaps(send, scripts, wanted, { deadline });
+    return maps.size > 0 ? (frame) => symbolicate(maps, frame) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Returns null when console access is off, the page cannot be debugged, or attaching failed. */
 export async function readConsole(tabId: number, url: string): Promise<Diagnostics | null> {
   if (!canAttach(url) || !(await hasConsoleAccess())) return null;
   const target = { tabId };
   const events: DebuggerEvent[] = [];
+  const scripts: ScriptInfo[] = [];
   const listener = (source: chrome.debugger.Debuggee, method: string, params?: object) => {
-    if (source.tabId === tabId) events.push({ method, params: (params ?? {}) as Record<string, unknown> });
+    if (source.tabId !== tabId) return;
+    if (method === "Debugger.scriptParsed") {
+      const script = scriptInfo((params ?? {}) as Record<string, unknown>);
+      if (script) scripts.push(script);
+      return;
+    }
+    events.push({ method, params: (params ?? {}) as Record<string, unknown> });
   };
+  let resolve: FrameResolver | undefined;
   chrome.debugger.onEvent.addListener(listener);
   let attached = false;
   let finished = false;
@@ -174,14 +247,16 @@ export async function readConsole(tabId: number, url: string): Promise<Diagnosti
       }
       await chrome.debugger.sendCommand(target, "Runtime.enable");
       await chrome.debugger.sendCommand(target, "Log.enable");
-      await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+      await new Promise((settle) => setTimeout(settle, SETTLE_MS));
+      const send: SendCommand = (method, params) => chrome.debugger.sendCommand(target, method, params);
+      resolve = await buildResolver(send, events, scripts, Date.now() + SOURCE_MAP_BUDGET_MS);
     })();
     const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS));
     await Promise.race([read, timeout]);
-    return diagnosticsFromEvents(events);
+    return diagnosticsFromEvents(events, resolve);
   } catch {
-    // Another debugger (DevTools on some pages) or a closed tab; report nothing.
-    return events.length > 0 ? diagnosticsFromEvents(events) : null;
+    // Another debugger (DevTools on some pages) or a closed tab; report what arrived.
+    return events.length > 0 ? diagnosticsFromEvents(events, resolve) : null;
   } finally {
     finished = true;
     chrome.debugger.onEvent.removeListener(listener);

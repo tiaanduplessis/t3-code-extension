@@ -1,5 +1,8 @@
 import {
   ArrowUpIcon,
+  CircleDotIcon,
+  CrosshairIcon,
+  ShieldCheckIcon,
   BrainIcon,
   FolderGit2Icon,
   FolderIcon,
@@ -20,7 +23,8 @@ import {
   PROJECT_DEFAULT_MODEL,
   resolveRuntimeMode,
 } from "@/lib/models";
-import { buildMessage, failedRequests, suggestTitle } from "@/lib/prompt";
+import { composeMessage, failedRequests, suggestTitle, type PromptParts } from "@/lib/prompt";
+import { describeRedactions, totalRedactions } from "@/lib/redact";
 import { ACTIVE_THREAD_STATUSES, type InteractionMode, type ModelSelection, type RuntimeMode, type SendMode, type WorkspaceStrategy } from "@/lib/t3";
 import { environmentLabels, exceedsCeiling, parseScopedKey, parseSiteTarget, scopedKey, siteTarget, type TargetMode } from "@/lib/targets";
 import { siteKey } from "@/shared/capture";
@@ -37,7 +41,9 @@ import { RUNTIME_MODE_DETAILS } from "@/ui/runtime-modes";
 import { SearchPicker, type SearchGroup } from "@/ui/search-picker";
 import { Picker, type SelectGroup } from "@/ui/select";
 import { useSession } from "@/ui/use-storage";
+import type { Diagnostics } from "@/shared/capture-types";
 import { ConsoleAccess } from "./console-access";
+import { RecordingControl } from "./recording";
 import { CONTEXT_ICONS, ContextChips, type ContextChip, type ContextKey } from "./context-chips";
 import { renderAnnotated, ScreenshotCard, type Box } from "./screenshot";
 import { useBranches, useCatalogs, useClients, useRecentThreads } from "./use-t3";
@@ -100,6 +106,7 @@ export function Composer({
   capture,
   captureLoading,
   onRecapture,
+  onDiagnostics,
   onDispatched,
 }: {
   /** Valid connections; the composer can target any of them. */
@@ -108,6 +115,7 @@ export function Composer({
   capture: Capture | null;
   captureLoading: boolean;
   onRecapture: () => void;
+  onDiagnostics: (diagnostics: Diagnostics) => void;
   onDispatched: (state: DispatchState) => void;
 }) {
   const clients = useClients(connections);
@@ -136,6 +144,17 @@ export function Composer({
   const [sendError, setSendError] = useState<string>();
   const dispatches = useSession("dispatches");
   const sendingPhase = sending ? dispatches?.[sending]?.phase : undefined;
+
+  // Outline a picked element on the screenshot, in image fractions.
+  useEffect(() => {
+    const picked = capture?.picked;
+    if (!picked || !capture?.screenshot) return;
+    const { rect, viewport } = picked;
+    const clamp = (value: number) => Math.min(1, Math.max(0, value));
+    const x = clamp(rect.x / viewport.width);
+    const y = clamp(rect.y / viewport.height);
+    setBoxes([{ x, y, width: clamp((rect.x + rect.width) / viewport.width) - x, height: clamp((rect.y + rect.height) / viewport.height) - y }]);
+  }, [capture?.id]);
 
   // Restore the draft note for this page.
   useEffect(() => {
@@ -283,6 +302,18 @@ export function Composer({
         toggleable: true,
       });
     }
+    if (capture.picked) {
+      const picked = capture.picked;
+      const component = picked.framework?.components[0];
+      list.push({
+        key: "element",
+        label: component ? `<${component}>` : picked.selector,
+        preview: [picked.selector, picked.framework?.source?.file, picked.text].filter(Boolean).join("\n"),
+        icon: CONTEXT_ICONS.element,
+        enabled: enabled("element"),
+        toggleable: true,
+      });
+    }
     if (capture.linkUrl) {
       list.push({ key: "link", label: "Link", preview: capture.linkUrl, icon: CONTEXT_ICONS.link, enabled: true, toggleable: false });
     }
@@ -290,6 +321,30 @@ export function Composer({
   }, [capture, page, failed, disabledContext]);
 
   const includes = (key: ContextKey) => !disabledContext.has(key);
+
+  const messageParts = (screenshot: { included: boolean; annotations: number }): PromptParts | null =>
+    capture
+      ? {
+          note,
+          page,
+          browser: capture.browser,
+          tab: { url: capture.url, title: capture.title },
+          includePage: includes("page"),
+          includeSelection: includes("selection"),
+          includeSlack: includes("slack"),
+          includeConsole: includes("console"),
+          includeNetwork: includes("network"),
+          ...(capture.picked ? { picked: capture.picked, includeElement: includes("element") } : {}),
+          diagnostics: capture.diagnostics,
+          screenshot,
+          ...(capture.linkUrl ? { linkUrl: capture.linkUrl } : {}),
+        }
+      : null;
+  // Preview of what redaction will mask, so the user knows before sending.
+  const redactions = useMemo(() => {
+    const parts = messageParts({ included: false, annotations: 0 });
+    return parts ? composeMessage(parts).redactions : {};
+  }, [capture, note, disabledContext]);
   const suggestedTitle = page ? suggestTitle(note, page, includes("slack")) : suggestTitle(note, null, false);
   // T3 Code's composer has no title field; the title follows the note, Slack message or page.
   const effectiveTitle = suggestedTitle.trim() || "Task from Chrome";
@@ -306,20 +361,9 @@ export function Composer({
     setSending(id);
     try {
       const screenshot = screenshotIncluded && capture.screenshot ? await renderAnnotated(capture.screenshot, boxes) : undefined;
-      const message = buildMessage({
-        note,
-        page,
-        browser: capture.browser,
-        tab: { url: capture.url, title: capture.title },
-        includePage: includes("page"),
-        includeSelection: includes("selection"),
-        includeSlack: includes("slack"),
-        includeConsole: includes("console"),
-        includeNetwork: includes("network"),
-        diagnostics: capture.diagnostics,
-        screenshot: { included: Boolean(screenshot), annotations: screenshot ? boxes.length : 0 },
-        ...(capture.linkUrl ? { linkUrl: capture.linkUrl } : {}),
-      });
+      const parts = messageParts({ included: Boolean(screenshot), annotations: screenshot ? boxes.length : 0 });
+      if (!parts) return;
+      const { message } = composeMessage(parts);
 
       let target: DispatchTarget;
       let targetTitle: string;
@@ -566,6 +610,37 @@ export function Composer({
             }
           />
           {!preferences.readConsole && site ? <ConsoleAccess onEnabled={onRecapture} /> : null}
+          {capture.diagnostics?.recording ? (
+            <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
+              <CircleDotIcon className="size-3.5 text-red-500" />
+              Recording attached: {Math.round(capture.diagnostics.recording.durationMs / 1000)} s,{" "}
+              {capture.diagnostics.recording.requests} requests
+            </p>
+          ) : null}
+          {site ? (
+            <Button
+              variant="ghost-muted"
+              size="xs"
+              className="-ms-2 self-start font-normal"
+              onClick={() => {
+                void sendToBackground({ type: "picker:start", tabId: capture.tabId })
+                  .then(() => window.close())
+                  .catch((error: unknown) => setSendError(error instanceof Error ? error.message : String(error)));
+              }}
+            >
+              <CrosshairIcon />
+              {capture.picked ? "Pick a different element" : "Pick an element"}
+            </Button>
+          ) : null}
+          {site && !capture.diagnostics?.recording ? (
+            <RecordingControl tabId={capture.tabId} url={capture.url} onAttach={onDiagnostics} />
+          ) : null}
+          {totalRedactions(redactions) > 0 ? (
+            <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
+              <ShieldCheckIcon className="size-3.5" />
+              Masked before sending: {describeRedactions(redactions)}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

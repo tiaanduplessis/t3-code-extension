@@ -1,7 +1,8 @@
 // Builds the first message for a dispatched thread: the user's note followed
 // by the browser context the user chose to include.
 
-import type { BrowserInfo, Diagnostics, NetworkFailure, PageContext, SlackContext, SlackMessage } from "@/shared/capture-types";
+import { describeRedactions, redact, totalRedactions } from "./redact";
+import type { BrowserInfo, Diagnostics, NetworkFailure, PageContext, PickedElement, SlackContext, SlackMessage } from "@/shared/capture-types";
 
 export const MAX_MESSAGE_LENGTH = 120_000;
 const MAX_SELECTION = 20_000;
@@ -24,6 +25,8 @@ export interface PromptParts {
   includeSlack: boolean;
   includeConsole: boolean;
   includeNetwork: boolean;
+  picked?: PickedElement;
+  includeElement?: boolean;
   diagnostics: Diagnostics | null;
   screenshot: { included: boolean; annotations: number };
   linkUrl?: string;
@@ -129,13 +132,51 @@ function networkSection(requests: NetworkFailure[]): string | null {
       const status = entry.status === null ? "failed" : String(entry.status);
       const detail = entry.statusText ? ` ${entry.statusText}` : "";
       const took = entry.durationMs !== undefined ? ` (${Math.round(entry.durationMs)} ms)` : "";
-      return `${entry.method ? `${entry.method} ` : ""}${entry.url} -> ${status}${detail}${took}`;
+      const line = `${entry.method ? `${entry.method} ` : ""}${entry.url} -> ${status}${detail}${took}`;
+      const excerpt = entry.responseExcerpt?.trim();
+      return excerpt ? `${line}\n    response: ${excerpt.replace(/\s*\n\s*/g, " ").slice(0, 500)}` : line;
     })
     .join("\n");
   return `### Failed network requests\n\n${codeBlock(body)}`;
 }
 
+function elementSection(element: PickedElement): string {
+  const lines = [`### Element the user picked`, "", `Selector: \`${element.selector}\``];
+  if (element.framework?.components.length) {
+    lines.push(`Component (${element.framework.name}): ${element.framework.components.join(" < ")}`);
+  }
+  if (element.framework?.source) {
+    const { file, line, column } = element.framework.source;
+    lines.push(`Source: ${file}${line !== undefined ? `:${line}` : ""}${column !== undefined ? `:${column}` : ""}`);
+  }
+  if (element.text) lines.push(`Text: ${element.text}`);
+  const attributes = Object.entries(element.attributes)
+    .map(([name, value]) => `${name}="${value}"`)
+    .join(" ");
+  if (attributes) lines.push(`Attributes: ${attributes}`);
+  const { x, y, width, height } = element.rect;
+  lines.push(`Position: ${Math.round(width)}x${Math.round(height)} at (${Math.round(x)}, ${Math.round(y)}) in a ${element.viewport.width}x${element.viewport.height} viewport`);
+  lines.push("", codeBlock(element.html));
+  return lines.join("\n");
+}
+
+function recordingLine(diagnostics: Diagnostics | null): string | null {
+  if (!diagnostics?.recording) return null;
+  const { durationMs, requests } = diagnostics.recording;
+  return `The user recorded ${duration(durationMs)} of activity while reproducing the problem (${requests} ${requests === 1 ? "request" : "requests"}). The console and network sections below come from that recording.`;
+}
+
+export interface BuiltMessage {
+  message: string;
+  /** Secrets masked in the captured context, per kind. */
+  redactions: Record<string, number>;
+}
+
 export function buildMessage(parts: PromptParts): string {
+  return composeMessage(parts).message;
+}
+
+export function composeMessage(parts: PromptParts): BuiltMessage {
   const sections: string[] = [];
   const note = parts.note.trim();
   if (note) sections.push(note);
@@ -159,10 +200,13 @@ export function buildMessage(parts: PromptParts): string {
     context.push(`Page: [${(parts.tab.title || parts.tab.url).replace(/[[\]]/g, "")}](${parts.tab.url})`);
   }
   if (parts.linkUrl) context.push(`Link the user right-clicked: ${parts.linkUrl}`);
+  if (parts.picked && parts.includeElement !== false) context.push(elementSection(parts.picked));
   if (page?.slack && parts.includeSlack) context.push(slackSection(page.slack));
   if (page?.selection && parts.includeSelection) {
     context.push(`### Selected text\n\n${quote(truncate(page.selection, MAX_SELECTION))}`);
   }
+  const recording = recordingLine(parts.diagnostics);
+  if (recording && (parts.includeConsole || parts.includeNetwork)) context.push(recording);
   if (parts.diagnostics && parts.includeConsole) {
     const section = consoleSection(parts.diagnostics);
     if (section) context.push(section);
@@ -179,14 +223,21 @@ export function buildMessage(parts: PromptParts): string {
     );
   }
 
+  // The user's own note is left as written; everything captured is redacted.
+  let redactions: Record<string, number> = {};
   if (context.length > 0) {
-    sections.push(
-      `## Context from Chrome\n\n${UNTRUSTED_NOTICE}\n\n${context.join("\n\n")}`,
-    );
+    const redacted = redact(context.join("\n\n"));
+    redactions = redacted.counts;
+    const masked = totalRedactions(redactions);
+    const notice = masked > 0 ? `\n\nMasked before sending: ${describeRedactions(redactions)}.` : "";
+    sections.push(`## Context from Chrome\n\n${UNTRUSTED_NOTICE}${notice}\n\n${redacted.text}`);
   }
 
   const message = sections.join("\n\n---\n\n");
-  return message.length > MAX_MESSAGE_LENGTH ? truncate(message, MAX_MESSAGE_LENGTH - 100) : message;
+  return {
+    message: message.length > MAX_MESSAGE_LENGTH ? truncate(message, MAX_MESSAGE_LENGTH - 100) : message,
+    redactions,
+  };
 }
 
 /** A short thread title from the note, Slack message or page title. */

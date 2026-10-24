@@ -83,3 +83,57 @@ describe("formatRemoteObject", () => {
     expect(formatRemoteObject({ type: "function", description: "function f() {}" })).toBe("function f() {}");
   });
 });
+
+describe("diagnosticsFromEvents with a frame resolver", () => {
+  const frame = { functionName: "a", url: "https://app/main.min.js", lineNumber: 0, columnNumber: 4821 };
+  const mapped: DebuggerEvent[] = [
+    {
+      method: "Runtime.consoleAPICalled",
+      params: { type: "error", timestamp: 1, args: [{ type: "string", value: "Checkout failed" }], stackTrace: { callFrames: [frame] } },
+    },
+    {
+      method: "Runtime.exceptionThrown",
+      params: {
+        timestamp: 2,
+        exceptionDetails: {
+          text: "Uncaught",
+          exception: { type: "object", description: "TypeError: x is undefined\n    at a (https://app/main.min.js:1:4822)" },
+          stackTrace: { callFrames: [frame] },
+        },
+      },
+    },
+  ];
+  const resolve = (input: { url: string; columnNumber: number }) =>
+    input.url === "https://app/main.min.js" && input.columnNumber === 4821 ? { source: "src/checkout/total.ts", line: 42, column: 7, name: "applyDiscount" } : null;
+
+  it("maps console and exception frames to original sources", () => {
+    const result = diagnosticsFromEvents(mapped, resolve);
+    expect(result.console[0]?.detail).toBe("at applyDiscount (src/checkout/total.ts:42:7)");
+    expect(result.console[1]?.detail).toBe("at applyDiscount (src/checkout/total.ts:42:7)");
+    expect(result.console[1]?.message).toBe("TypeError: x is undefined");
+  });
+
+  it("keeps the original frames when a frame has no mapping", () => {
+    const result = diagnosticsFromEvents(mapped, () => null);
+    expect(result.console[0]?.detail).toBe("at a (https://app/main.min.js:1:4822)");
+  });
+});
+
+describe("logged Error objects", () => {
+  it("keep only their first line when the call has its own stack", () => {
+    const result = diagnosticsFromEvents([
+      {
+        method: "Runtime.consoleAPICalled",
+        params: {
+          type: "error",
+          timestamp: 1,
+          args: [{ type: "object", subtype: "error", description: "Error: Checkout boot failed\n    at n (https://app/main.min.js:1:71)" }],
+          stackTrace: { callFrames: [{ functionName: "n", url: "https://app/main.min.js", lineNumber: 0, columnNumber: 64 }] },
+        },
+      },
+    ]);
+    expect(result.console[0]?.message).toBe("Error: Checkout boot failed");
+    expect(result.console[0]?.detail).toBe("at n (https://app/main.min.js:1:65)");
+  });
+});
+
