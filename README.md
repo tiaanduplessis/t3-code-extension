@@ -4,6 +4,11 @@ A Chrome extension that sends what you are looking at to [T3 Code](https://t3.co
 
 > **Status:** early and unofficial. This is a personal project, not affiliated with or endorsed by T3 Tools Inc. It depends on T3 Code's MCP tools and OAuth endpoints, which T3 Code does not document as a stable API. It was last tested with T3 Code 0.1.2 and Chromium 156. It is not on the Chrome Web Store; install it from a release or from source.
 
+<p>
+  <img src="docs/images/composer.png" width="380" alt="The composer: a screenshot of a checkout page with the wrong total outlined in red, context chips for the page, selection, console and failed requests, and a note asking the agent to fix the discount.">
+  <img src="docs/images/existing-thread.png" width="380" alt="Sending to an existing thread: a searchable list of recent threads, each with its project badge and age.">
+</p>
+
 Use it to:
 
 - Hand a Slack message from your team to an agent straight away.
@@ -54,6 +59,8 @@ Then load it:
 3. Pin **Send to T3 Code (unofficial)** to the toolbar.
 
 ## Connect T3 Code
+
+<img src="docs/images/settings.png" width="640" alt="The settings page with a connected environment, context options, the keyboard shortcut and recent activity.">
 
 1. Open the extension's settings. Right-click the toolbar icon and choose **Options**, or use the gear in the popup.
 2. Create a pairing code in T3 Code under **Settings > Connections**. Or run this in a terminal:
@@ -169,6 +176,10 @@ The browser scripts need Playwright's Chromium: `pnpm exec playwright install ch
 
 - `T3_ORIGIN` and `T3_BASE_DIR` point it at another server.
 - `T3_ACCESS=full-access` approves it with full access. Project changes need this.
+
+### README screenshots
+
+`scripts/readme-screenshots.mjs` regenerates `docs/images/` from a demo T3 Code server with made-up projects. The setup steps are at the top of the script.
 
 ### Slack check
 

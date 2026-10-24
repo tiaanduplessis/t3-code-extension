@@ -20,6 +20,8 @@ These need a running T3 Code and the `t3` CLI at `~/.t3/bin/t3`. They mint pairi
 - `node scripts/e2e.mjs --project "<title>"` - starts real agent threads in that project. Only use a throwaway project, never a user's real project.
 - `node scripts/slack-check.mjs` - no T3 Code needed.
 - `node scripts/mcp-call.mjs <tool> '<json>'` - calls any MCP tool, including destructive ones.
+- `node scripts/readme-screenshots.mjs` - regenerates `docs/images/` from a demo server with made-up projects (setup in the script). Never capture screenshots from a real environment.
+- `node scripts/render-icons.mjs` - renders `public/icons/` from `assets/icon.svg`.
 
 Never send test messages to existing user threads.
 
