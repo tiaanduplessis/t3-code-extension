@@ -2,6 +2,8 @@
 
 A Chrome extension that sends what you are looking at to [T3 Code](https://t3.codes). It can start a new agent thread or add to an existing one, in any T3 Code environment you have connected. Each message carries a screenshot, the page context and browser details, and can include console errors.
 
+> **Status:** early and unofficial. This is a personal project, not affiliated with or endorsed by T3 Tools Inc. It depends on T3 Code's MCP tools and OAuth endpoints, which T3 Code does not document as a stable API. It was last tested with T3 Code 0.1.2 and Chromium 156. It is not on the Chrome Web Store; install it from source.
+
 Use it to:
 
 - Hand a Slack message from your team to an agent straight away.
@@ -100,6 +102,13 @@ In the composer:
 
 If you close the popup while sending, the work continues, and Chrome shows a notification when it is done.
 
+## Privacy
+
+- **Where data goes.** Captured data goes only to the T3 Code servers you connect, and only when you send. The extension has no analytics or telemetry and contacts no other service.
+- **What is stored in Chrome.** Connection tokens, preferences, drafts and recent activity are kept in `chrome.storage` in your browser profile.
+- **What is read from a page, and when.** Page content, the console and Slack messages are read only when you open the composer or use the context menu. The Slack content script on `app.slack.com` only remembers which message you last right-clicked or hovered.
+- **What reaches the agent.** Anything you send goes to the agent and model provider configured in T3 Code. Leave out the screenshot or context chips that contain anything you don't want to share.
+
 ## Permissions
 
 | Permission | Why |
@@ -193,3 +202,7 @@ The extension relies on T3 Code's MCP tools and OAuth endpoints. T3 Code is in b
 - **Recent threads.** Outside clients can only list threads per project. The extension asks each project for its latest active threads, up to six projects at a time. The list is cached for the browser session.
 - **Branches and worktrees.** These come from `t3_worktree_list`, which needs a thread, so the extension uses the project's most recent thread. For a project with no threads, it asks you to type the base branch.
 - **Opening a thread.** Threads appear in the T3 Code app's thread list. **Open in T3 Code's web app** opens a thread in the web UI on the same server. A browser that is not paired with T3 Code sees a pairing screen instead. The desktop app has no link that opens a specific thread.
+
+## Acknowledgements
+
+The UI adapts T3 Code's design tokens, component styles and icon. T3 Code is MIT licensed; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
