@@ -15,3 +15,7 @@ First tracked version.
 - Pairing with T3 Code through pairing codes or links, with a per-connection access ceiling.
 - Settings page for environments, context options, shortcuts and recent activity.
 - Right-click menu, keyboard shortcut (Alt+Shift+T) and notifications when sending finishes after the popup closes.
+- Element picker: click an element to send its selector, text, HTML and, on React, Vue and Svelte development builds, its component and source file.
+- Source-mapped stack traces when the page publishes source maps.
+- Record while you reproduce: console and failed requests with method, status, timing and response excerpts.
+- Masking of likely secrets (tokens, API keys, passwords) in captured context before sending.

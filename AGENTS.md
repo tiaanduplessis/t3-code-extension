@@ -18,6 +18,7 @@ These need a running T3 Code and the `t3` CLI at `~/.t3/bin/t3`. They mint pairi
 
 - `pnpm check:contract` - read-only contract check. `--launch` starts a real scratch thread.
 - `node scripts/e2e.mjs --project "<title>"` - starts real agent threads in that project. Only use a throwaway project, never a user's real project.
+- `node scripts/features-check.mjs --project "<title>"` - proves redaction, source maps, the element picker and recording end to end. Starts real threads; throwaway project only.
 - `node scripts/slack-check.mjs` - no T3 Code needed.
 - `node scripts/mcp-call.mjs <tool> '<json>'` - calls any MCP tool, including destructive ones.
 - `node scripts/readme-screenshots.mjs` - regenerates `docs/images/` from a demo server with made-up projects (setup in the script). Never capture screenshots from a real environment.
@@ -39,5 +40,7 @@ Never send test messages to existing user threads.
 - T3 Code's `/mcp` endpoint rejects requests with an `Origin` header. `src/background/origin-rules.ts` removes it only for the extension's own requests. Do not widen that rule.
 - `t3_thread_launch` and `t3_thread_send_attachments` have no retry key. Never retry them blindly. `t3_thread_send` takes `clientRequestId`.
 - `debugger` must be a required permission; Chrome rejects it as optional. Console reading is a user setting instead.
-- Prompts include third-party page and Slack text. Keep the untrusted-context notice in `src/lib/prompt.ts`.
+- Prompts include third-party page and Slack text. Keep the untrusted-context notice in `src/lib/prompt.ts`, and keep all captured context going through `redact()` (never the user's own note).
+- The element picker runs in the page's world, so the page can forge its messages. Treat picked-element fields as untrusted page text, and take the page URL from `sender.tab`.
+- Only one debugger session can belong to the extension per tab: the console reader skips tabs that are recording.
 - Match T3 Code's UI patterns and wording (runtime mode labels, "Current checkout", "New worktree").

@@ -14,7 +14,10 @@ Send what you're looking at in Chrome to a [T3 Code](https://t3.codes) agent, wi
 - **New or existing threads** in any T3 Code environment you connect.
 - **Marked-up screenshots.** Drag to outline what you mean.
 - **Browser context:** the page, your selection, browser and OS, viewport and failed requests.
-- **Console errors,** including ones logged before you opened the composer.
+- **Console errors,** including ones logged before you opened the composer, with stack traces mapped to your source files when the site publishes source maps.
+- **Element picker.** Click an element to send its selector, text, HTML and, on React, Vue or Svelte dev builds, its component and source file.
+- **Record while you reproduce.** Captures the console and every failed request, with method, status and the start of the response.
+- **Secrets masked.** Tokens, API keys and passwords in captured context are masked before sending.
 - **Slack messages.** Right-click a message to send it with its thread replies.
 - **T3 Code controls:** model, reasoning effort, access level, plan mode and worktree.
 
@@ -35,6 +38,8 @@ You need Chrome 127 or later and T3 Code running.
 
 - **Open the composer** from the toolbar icon, with <kbd>Alt+Shift+T</kbd>, or by right-clicking a page, selection, link or Slack message.
 - **Choose the context.** Click a context chip to leave it out. The eye button leaves out the screenshot.
+- **Point at something.** Drag on the screenshot to outline it, or use **Pick an element** and click it on the page (Esc cancels).
+- **Reproduce a bug.** Click **Record while you reproduce**, repeat the steps in the tab, then reopen the composer and click **Stop and attach**. Chrome's debugging bar stays visible while recording.
 - **Send.** <kbd>Enter</kbd> sends. <kbd>Shift+Enter</kbd> adds a new line.
 - **Threads that are working:** choose **Queue** to send after the current turn, or **Steer** to join it. Messages with a screenshot always steer, because T3 Code can't queue attachments.
 

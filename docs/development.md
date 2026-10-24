@@ -27,12 +27,12 @@ The extension connects to each T3 Code environment's MCP server as an approved O
 
 | Path | Contents |
 | --- | --- |
-| `src/background/` | Service worker: dispatch, console reader, right-click menu, Origin rule |
+| `src/background/` | Service worker: dispatch, console reader, source maps, recorder, right-click menu, Origin rule |
 | `src/popup/` | Composer UI |
 | `src/options/` | Settings page |
 | `src/lib/` | MCP client, pairing flow, T3 Code tool wrappers, prompt builder |
 | `src/capture/` | Function injected with `executeScript`; it must stay self-contained |
-| `src/content/` | Slack content script |
+| `src/content/` | Slack content script, element picker (page world) and its bridge |
 | `src/ui/` | Components styled after T3 Code |
 
 ## Scripts with a live T3 Code
@@ -44,6 +44,7 @@ These need the `t3` CLI at `~/.t3/bin/t3`. Each script mints its own pairing cod
 | `pnpm check:contract` | Checks discovery, pairing, the token exchange and the tool list. `--launch` also starts a scratch thread. |
 | `node scripts/mcp-call.mjs <tool> '<json>'` | Calls MCP tools as the extension would. `T3_ORIGIN` and `T3_BASE_DIR` select a server; `T3_ACCESS=full-access` allows project changes. |
 | `node scripts/e2e.mjs --project "<title>"` | Full flow in Chromium: pair, read the console, start a thread, send a follow-up, check that web pages still get 403. Starts real threads, so use a throwaway project. |
+| `node scripts/features-check.mjs --project "<title>"` | Proves redaction, source-mapped stacks, the element picker (including Esc) and recording in Chromium, then reads back the messages T3 Code received. Starts real threads, so use a throwaway project. Writes a receipt to `e2e-output/`. |
 | `node scripts/slack-check.mjs` | Checks the Slack path against made-up Slack markup. No T3 Code needed. |
 | `node scripts/readme-screenshots.mjs` | Regenerates `docs/images/` from a demo server. Setup is at the top of the script. |
 | `node scripts/render-icons.mjs` | Renders `public/icons/` from `assets/icon.svg`. |
