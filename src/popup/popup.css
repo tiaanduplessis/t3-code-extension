@@ -1,0 +1,9 @@
+/* The action popup is sized by its content; Chrome caps it at 800x600. When
+   opened as a window from the context menu, it fills the window instead. */
+html {
+  width: 460px;
+}
+
+html:has(body[data-window]) {
+  width: auto;
+}
