@@ -157,6 +157,9 @@ export async function runDispatch(request: DispatchRequest): Promise<DispatchSta
 }
 
 function errorMessage(error: unknown): string {
+  if (error instanceof McpError && error.kind === "tool" && /no default model/i.test(error.message)) {
+    return "This project has no default model. Choose a model in the composer, or set a default in T3 Code.";
+  }
   if (error instanceof McpError && error.code === "runtime_mode_escalation_denied") {
     return "This thread runs with broader access than this connection allows. Reconnect T3 Code with a higher access level in the extension settings.";
   }
