@@ -1,0 +1,6 @@
+node_modules
+dist
+*.zip
+.DS_Store
+e2e-output
+.ui-review
