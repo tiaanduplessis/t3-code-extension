@@ -64,9 +64,6 @@ try {
     await chrome.storage.local.set({ connections });
     return Object.values(connections)[0].accessToken;
   });
-  await opts.emulateMedia({ colorScheme: "dark" });
-  await opts.waitForTimeout(500);
-  await opts.screenshot({ path: "docs/images/settings.png", fullPage: true });
 
   await page.evaluate(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById("total")); getSelection().addRange(r); });
   let pg = await popup();

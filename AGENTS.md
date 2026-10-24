@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Chrome MV3 extension that sends the current page (screenshot, page and browser context, console history, Slack messages) to new or existing threads in T3 Code through T3 Code's MCP server. See README.md for user-facing behavior.
+Chrome MV3 extension that sends the current page (screenshot, page and browser context, console history, Slack messages) to new or existing threads in T3 Code through T3 Code's MCP server. See README.md for user-facing behavior, docs/permissions.md for permissions and privacy, and docs/development.md for scripts and releasing.
 
 ## Commands
 
