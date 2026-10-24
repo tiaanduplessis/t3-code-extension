@@ -2,7 +2,7 @@
 
 ## T3 Code
 
-The extension's design tokens and component styles (`src/ui/`), runtime mode labels and descriptions, and the icons in `public/icons/` are adapted from [T3 Code](https://github.com/pingdotgg/t3code), which is distributed under the following license:
+The extension's design tokens and component styles (`src/ui/`) and its runtime mode labels and descriptions are adapted from [T3 Code](https://github.com/pingdotgg/t3code), which is distributed under the following license:
 
 ```
 MIT License
@@ -28,4 +28,4 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-"T3 Code" and its logo belong to T3 Tools Inc. This extension is not affiliated with or endorsed by T3 Tools Inc.
+"T3 Code" is a name of T3 Tools Inc. This extension is not affiliated with or endorsed by T3 Tools Inc. Its icon is original (`assets/icon.svg`).

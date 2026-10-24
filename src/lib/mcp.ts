@@ -105,7 +105,7 @@ export class McpClient {
       await this.request("initialize", {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "T3 Code for Chrome", version: chrome.runtime.getManifest().version },
+        clientInfo: { name: "Send to T3 Code (unofficial)", version: chrome.runtime.getManifest().version },
       });
       await this.post({ jsonrpc: "2.0", method: "notifications/initialized" });
     })().catch((error: unknown) => {

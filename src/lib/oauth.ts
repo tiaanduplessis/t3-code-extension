@@ -26,7 +26,7 @@ export class PairingError extends Error {
   }
 }
 
-const CLIENT_NAME = "T3 Code for Chrome";
+const CLIENT_NAME = "Send to T3 Code (unofficial)";
 
 /** Accepts a bare pairing code or a full pairing link (…/pair#token=CODE). */
 export function parsePairingInput(input: string): PairingInput {

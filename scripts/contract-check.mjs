@@ -50,7 +50,7 @@ const client = await json(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      client_name: "T3 Code for Chrome (contract check)",
+      client_name: "Send to T3 Code (unofficial) (contract check)",
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code"],
       response_types: ["code"],

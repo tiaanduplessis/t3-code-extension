@@ -33,7 +33,7 @@ const client = await json(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      client_name: "T3 Code for Chrome (mcp-call)",
+      client_name: "Send to T3 Code (unofficial) (mcp-call)",
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code"],
       response_types: ["code"],

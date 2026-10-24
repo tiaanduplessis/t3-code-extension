@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "T3 Code for Chrome",
-  "short_name": "T3 Code",
+  "name": "Send to T3 Code (unofficial)",
+  "short_name": "Send to T3",
   "version": "0.2.0",
-  "description": "Send what you are looking at, with a screenshot and page context, to a new agent thread in T3 Code.",
+  "description": "Unofficial. Send what you are looking at, with a screenshot, browser details and console errors, to new or existing T3 Code threads.",
   "minimum_chrome_version": "127",
   "icons": {
     "16": "icons/icon-16.png",

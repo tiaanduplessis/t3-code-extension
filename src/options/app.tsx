@@ -94,7 +94,7 @@ export function App() {
       <header className="sticky top-0 z-10 flex h-12 items-center gap-2.5 border-b bg-background/90 px-6 backdrop-blur">
         <img src="/icons/icon-32.png" alt="" className="size-5 rounded-[5px]" />
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">T3 Code for Chrome</span>
+          <span className="text-muted-foreground">Send to T3 Code</span>
           <span className="text-muted-foreground">/</span>
           <h1 className="text-foreground">Settings</h1>
         </nav>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Original icon: an arrow dropping into a tray, on T3 Code's indigo accent. -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="oklch(48.8% 0.217 264)"/>
+  <g fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 26v48"/>
+    <path d="M44 56l20 20 20-20"/>
+    <path d="M28 78v12a10 10 0 0 0 10 10h52a10 10 0 0 0 10-10V78"/>
+  </g>
+</svg>
