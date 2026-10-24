@@ -1,8 +1,8 @@
-# T3 Code for Chrome
+# Send to T3 Code (unofficial)
 
 A Chrome extension that sends what you are looking at to [T3 Code](https://t3.codes). It can start a new agent thread or add to an existing one, in any T3 Code environment you have connected. Each message carries a screenshot, the page context and browser details, and can include console errors.
 
-> **Status:** early and unofficial. This is a personal project, not affiliated with or endorsed by T3 Tools Inc. It depends on T3 Code's MCP tools and OAuth endpoints, which T3 Code does not document as a stable API. It was last tested with T3 Code 0.1.2 and Chromium 156. It is not on the Chrome Web Store; install it from source.
+> **Status:** early and unofficial. This is a personal project, not affiliated with or endorsed by T3 Tools Inc. It depends on T3 Code's MCP tools and OAuth endpoints, which T3 Code does not document as a stable API. It was last tested with T3 Code 0.1.2 and Chromium 156. It is not on the Chrome Web Store; install it from a release or from source.
 
 Use it to:
 
@@ -36,16 +36,22 @@ What it sends; you can switch each item off before sending:
 
 ## Install
 
-Requires Node 24, pnpm and Chrome 127 or later.
+Requires Chrome 127 or later.
+
+**From a release:** download `send-to-t3-code-vX.Y.Z.zip` from the [releases page](https://github.com/tiaanduplessis/t3-code-extension/releases), and unzip it.
+
+**From source:** requires Node 24 and pnpm.
 
 ```sh
 pnpm install
 pnpm build
 ```
 
+Then load it:
+
 1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Click **Load unpacked** and choose the `dist` folder.
-3. Pin **T3 Code for Chrome** to the toolbar.
+2. Click **Load unpacked** and choose the unzipped release folder, or `dist` when building from source.
+3. Pin **Send to T3 Code (unofficial)** to the toolbar.
 
 ## Connect T3 Code
 
@@ -79,7 +85,7 @@ Captured context can include text other people wrote, such as a web page or a Sl
 **Include console errors** is on by default and can be turned off in settings. The extension reads the tab's console history through Chrome's debugger API:
 
 - **Earlier messages are included.** When the debugger attaches, Chrome replays the errors, warnings and failed requests the tab has already logged. Nothing needs to be set up beforehand, and you don't need to reload the page.
-- **Chrome shows a debugging bar briefly.** The bar reads "T3 Code for Chrome started debugging this browser" and appears for under a second while the console is read. The screenshot is taken before the bar appears.
+- **Chrome shows a debugging bar briefly.** The bar reads "Send to T3 Code (unofficial) started debugging this browser" and appears for under a second while the console is read. The screenshot is taken before the bar appears.
 - **Chrome requires the `debugger` permission at install.** It can't be an optional permission. Loaded unpacked, Chrome shows no prompt for it.
 - **Some pages can't be read.** Chrome does not allow it on `chrome://` pages or the Chrome Web Store, and some pages refuse a second debugger, for example when DevTools is attached in a particular way. On those pages, the message goes without console information.
 
@@ -131,6 +137,14 @@ T3 Code's `/mcp` endpoint rejects any request that carries an `Origin` header, e
 - the request goes to `<connected origin>/mcp`.
 
 Requests from web pages keep their `Origin` header, and T3 Code still rejects them. The end-to-end test checks this with a valid token. If T3 Code starts accepting `chrome-extension://` origins, the rule can be removed.
+
+## Releasing
+
+1. Update the version in both `package.json` and `public/manifest.json`. The build fails if they differ.
+2. Move the changes under a `## X.Y.Z - YYYY-MM-DD` heading in `CHANGELOG.md`.
+3. Commit, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The release workflow checks that the tag matches `package.json`, runs the checks, and attaches `send-to-t3-code-vX.Y.Z.zip` to a GitHub Release, using that version's changelog section as the notes.
 
 ## Development
 
@@ -205,4 +219,8 @@ The extension relies on T3 Code's MCP tools and OAuth endpoints. T3 Code is in b
 
 ## Acknowledgements
 
-The UI adapts T3 Code's design tokens, component styles and icon. T3 Code is MIT licensed; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The UI adapts T3 Code's design tokens and component styles. T3 Code is MIT licensed; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## License
+
+[MIT](LICENSE)
