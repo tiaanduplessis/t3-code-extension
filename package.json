@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "description": "Chrome extension that sends what you are looking at, with a screenshot, browser details and console errors, to new or existing T3 Code threads.",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tiaanduplessis/t3-code-extension.git"
